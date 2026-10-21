@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import CountyMap from "./CountyMap";
 import FilterPanel from "./FilterPanel";
@@ -105,6 +106,14 @@ export default function JobBoard({ report, initialFilters = DEFAULT_FILTERS, syn
         {/* ---------- Hero: headline + county map ---------- */}
         <section className="mx-auto max-w-6xl px-4 sm:px-6 pt-8 pb-10 grid gap-8 lg:grid-cols-[1fr_26rem] lg:items-end">
           <div className="max-w-xl">
+            <Image
+              src="/map.png"
+              alt="Map of Kentucky with the south central region highlighted"
+              width={1200}
+              height={530}
+              priority
+              className="mb-6 w-full max-w-[18rem] sm:max-w-sm h-auto"
+            />
             <h1 className="font-display text-[2.6rem] sm:text-6xl font-bold leading-[0.95] tracking-tight">
               Find a job you can get to.
             </h1>
