@@ -3,7 +3,7 @@
 A job board for south central Kentucky, built from the weekly open job report that
 reentry case managers use to match people with work.
 
-**Live site:** _add your Vercel URL here_
+**Live site:** [https://soky-jobs.vercel.app/]
 
 ![Job board on desktop](docs/screenshots/board-desktop.png)
 
