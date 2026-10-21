@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# job reports (the cleaned JSON is what gets committed)
+*.xlsx
+__pycache__/

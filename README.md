@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# South Central KY Jobs
 
-## Getting Started
+A job board built from the weekly South Central Kentucky open job report (a JobsEQ
+export). A Python script cleans the spreadsheet, removes likely-filled "ghost" jobs,
+and saves the result as JSON. The Next.js site reads that JSON at build time, so the
+whole site is static: no database, no API, no server costs.
 
-First, run the development server:
+## Weekly update (about 2 minutes)
+
+1. Save the new report somewhere, e.g. `~/Downloads/South_Central_Open_Job_Report_10-26-2026.xlsx`
+2. From this folder, run:
+
+   ```bash
+   python scripts/job_report_cleaner.py ~/Downloads/South_Central_Open_Job_Report_10-26-2026.xlsx --json src/data/jobs.json
+   ```
+
+   This writes the website data to `src/data/jobs.json` and also saves a cleaned
+   Excel copy next to the original report.
+3. Optional: check it locally with `npm run dev` and open http://localhost:3000
+4. Commit and push:
+
+   ```bash
+   git add src/data/jobs.json
+   git commit -m "Jobs report 10/26/2026"
+   git push
+   ```
+
+   Vercel rebuilds and deploys automatically.
+
+## First-time setup
 
 ```bash
+pip install pandas openpyxl     # for the Python script
+npm install                     # for the site
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+On Vercel: import the GitHub repo, keep the defaults (framework: Next.js), deploy.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it fits together
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+scripts/job_report_cleaner.py   cleans the .xlsx -> src/data/jobs.json (+ cleaned .xlsx)
+src/data/jobs.json              the only thing that changes each week
+src/lib/types.ts                TypeScript shape of jobs.json
+src/lib/filters.ts              filter state, URL <-> filters, filtering + sorting
+src/lib/format.ts               dates, money, "A, B, and C"
+src/app/page.tsx                imports the JSON, renders header/footer + board
+src/components/JobBoard.tsx     owns filter state, keeps the URL in sync
+src/components/CountyMap.tsx    clickable county tiles with job counts
+src/components/FilterPanel.tsx  sidebar (desktop) / drawer (mobile) filters
+src/components/JobRow.tsx       one job in the list
+src/components/PrintList.tsx    compact table used when printing
+```
 
-## Learn More
+## Ghost-job rules (in the Python script)
 
-To learn more about Next.js, take a look at the following resources:
+- Posted more than 90 days before the report date (change with `--max-age 60`)
+- Older reposts of the same title + employer + town (newest copy is kept)
+- Exact duplicate links
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+These are best guesses. The source report marks every job "Active," so nothing
+confirms a job is filled.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Common changes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **A town shows up as "Unknown":** add it to `CITY_TO_COUNTY` in the Python script.
+- **Add a county to the map:** add it to `MAP_COUNTIES` in `src/lib/filters.ts` and
+  give it a grid position in `TILES` in `src/components/CountyMap.tsx`.
+- **Change colors or fonts:** `src/app/globals.css` (the `@theme` block).
