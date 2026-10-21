@@ -43,3 +43,4 @@ next-env.d.ts
 # job reports (the cleaned JSON is what gets committed)
 *.xlsx
 __pycache__/
+!.env.example
