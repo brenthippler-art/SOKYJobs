@@ -2,11 +2,17 @@ import { Suspense } from "react";
 import JobBoard, { JobBoardFromUrl } from "@/components/JobBoard";
 import { formatDate } from "@/lib/format";
 import type { JobReport } from "@/lib/types";
-// The weekly data file. Importing it here bakes it into the page at build
+import { applyChecks, type IndeedStatusFile, type StatusFile } from "@/lib/verify/status";
+// The data files. Importing them here bakes them into the page at build
 // time, so the site is fully static - no database, no API.
-import data from "@/data/jobs.json";
+import data from "@/data/jobs.json"; // weekly report (from /admin)
+import weeklyChecks from "@/data/job-status.json"; // weekly link check (GitHub Actions)
+import indeedChecks from "@/data/indeed-status.json"; // Indeed check (npm run check-indeed)
 
-const report = data as JobReport;
+const fullReport = data as JobReport;
+const checks = applyChecks(fullReport.jobs, weeklyChecks as StatusFile, indeedChecks as IndeedStatusFile);
+// The board only ever sees jobs that aren't known to be closed
+const report: JobReport = { ...fullReport, jobs: checks.jobs };
 
 export default function Home() {
   const updated = formatDate(report.reportDate, true);
@@ -37,6 +43,15 @@ export default function Home() {
             {report.removedCount.toLocaleString()} that were more than 90 days old or were repeat
             postings of the same job, since those are usually already filled.
           </p>
+          {checks.checkedAt && (
+            <p>
+              Each week, when the new report comes in, we check every job&apos;s original
+              posting. The last check, on{" "}
+              {formatDate(checks.checkedAt.slice(0, 10), true)}, found{" "}
+              {checks.closedCount.toLocaleString()} more that had closed, so they&apos;re hidden too.
+              Jobs marked &quot;Confirmed open&quot; were still taking applications when checked.
+            </p>
+          )}
           <p>
             Hourly pay is estimated from yearly pay (40 hours a week). Always check the posting
             before applying.

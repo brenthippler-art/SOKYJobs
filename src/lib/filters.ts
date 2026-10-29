@@ -11,6 +11,7 @@ export interface Filters {
   payListed: boolean;
   minHourly: number | null;
   hideAgencies: boolean;
+  confirmedOnly: boolean; // only jobs the link checker confirmed open
   sort: SortKey;
 }
 
@@ -24,6 +25,7 @@ export const DEFAULT_FILTERS: Filters = {
   payListed: false,
   minHourly: null,
   hideAgencies: false,
+  confirmedOnly: false,
   sort: "newest",
 };
 
@@ -57,6 +59,7 @@ export function filtersFromParams(params: URLSearchParams): Filters {
     payListed: params.get("pay") === "listed",
     minHourly: min > 0 ? min : null,
     hideAgencies: params.get("agencies") === "hide",
+    confirmedOnly: params.get("confirmed") === "1",
     sort: sort === "pay" || sort === "employer" ? sort : "newest",
   };
 }
@@ -70,6 +73,7 @@ export function filtersToParams(f: Filters): string {
   if (f.payListed) p.set("pay", "listed");
   if (f.minHourly) p.set("min", String(f.minHourly));
   if (f.hideAgencies) p.set("agencies", "hide");
+  if (f.confirmedOnly) p.set("confirmed", "1");
   if (f.sort !== "newest") p.set("sort", f.sort);
   return p.toString();
 }
@@ -91,6 +95,7 @@ export function matches(job: Job, f: Filters, skip?: "county" | "category"): boo
   if (f.payListed && job.hourlyPay === null) return false;
   if (f.minHourly && (job.hourlyPay === null || job.hourlyPay < f.minHourly)) return false;
   if (f.hideAgencies && job.agency) return false;
+  if (f.confirmedOnly && !job.checkedOpenOn) return false;
   if (f.q) {
     const haystack = `${job.title} ${job.employer} ${job.occupation ?? ""}`.toLowerCase();
     // every word typed must appear somewhere: "cdl driver" finds "Driver - CDL A"
@@ -127,6 +132,7 @@ export function activeFilterCount(f: Filters): number {
     (f.payListed ? 1 : 0) +
     (f.minHourly ? 1 : 0) +
     (f.hideAgencies ? 1 : 0) +
+    (f.confirmedOnly ? 1 : 0) +
     (f.q ? 1 : 0)
   );
 }

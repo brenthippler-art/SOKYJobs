@@ -80,6 +80,19 @@ export default function FilterPanel({ filters, categoryCounts, onChange }: Props
           </label>
         ))}
         <p className="text-sm text-muted mt-1">Newer postings are more likely to still be open.</p>
+        <label className="flex items-center gap-3 py-1.5 mt-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={filters.confirmedOnly}
+            onChange={(e) => onChange({ confirmedOnly: e.target.checked })}
+            className="size-5 accent-field"
+          />
+          Only jobs confirmed open
+        </label>
+        <p className="text-sm text-muted mt-1">
+          We check each job&apos;s original posting every week. Some sites can&apos;t be checked, so
+          this hides those too.
+        </p>
       </fieldset>
 
       <fieldset>

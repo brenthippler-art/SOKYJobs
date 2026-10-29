@@ -1,0 +1,68 @@
+# Checks every listed job and commits the results.
+# The commit triggers a Vercel redeploy, which hides the closed jobs.
+#
+# Runs:
+#   - right after a new weekly report is published (jobs.json changes)
+#   - any time from the Actions tab ("Run workflow")
+
+name: Check job links
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/data/jobs.json"]
+  workflow_dispatch:
+
+# Lets the workflow commit job-status.json back to the repo
+permissions:
+  contents: write
+
+# If a new report is published while a check is running, start over with it
+concurrency:
+  group: check-jobs
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Optional repo secret - see the last step
+      VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so the pull --rebase below always works
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check every job
+        run: npm run check-jobs
+
+      - name: Save results
+        id: save
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add src/data/job-status.json
+          if git diff --staged --quiet; then
+            echo "No changes since last check."
+            exit 0
+          fi
+          git commit -m "Job link check $(date -u +%Y-%m-%d)"
+          # Someone may have published a report while we were checking
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Optional: if Vercel doesn't redeploy after this workflow's commits,
+      # create a Deploy Hook in Vercel and save its URL as the repo secret
+      # VERCEL_DEPLOY_HOOK. This step then triggers the deploy directly.
+      - name: Redeploy on Vercel
+        if: steps.save.outputs.changed == 'true' && env.VERCEL_DEPLOY_HOOK != ''
+        run: curl -fsS -X POST "$VERCEL_DEPLOY_HOOK" > /dev/null

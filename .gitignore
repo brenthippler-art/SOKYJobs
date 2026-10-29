@@ -44,3 +44,6 @@ next-env.d.ts
 *.xlsx
 __pycache__/
 !.env.example
+
+# Chrome profile used by npm run check-indeed (cookies etc. - never commit)
+.indeed-profile/

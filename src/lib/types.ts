@@ -20,6 +20,9 @@ export interface Job {
   daysOld: number; // days between posting and the report date
   freshness: Freshness;
   url: string;
+  // Set by the link checker when the original posting was confirmed open
+  // ("2026-10-29"). Missing = not confirmed either way.
+  checkedOpenOn?: string;
 }
 
 export interface JobReport {
