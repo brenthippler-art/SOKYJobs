@@ -65,23 +65,58 @@ async function readWorkbook(data: ArrayBuffer): Promise<{ rows: RawRow[]; report
   try {
     await workbook.xlsx.load(data);
   } catch {
-    throw new ReportError("That file couldn't be opened as an Excel (.xlsx) file.");
+    throw new ReportError(
+      "That file couldn't be opened as an Excel (.xlsx) file. If it was opened and re-saved or reformatted, try the original from the email.",
+    );
   }
-  const sheet = workbook.worksheets[0];
-  if (!sheet) throw new ReportError("The spreadsheet has no sheets.");
+    if (!workbook.worksheets.length) throw new ReportError("The spreadsheet has no sheets.");
 
-  // The header isn't on row 1 (row 1 is a title), so look for it.
+  // A file this site (or the old Python script) already cleaned has a
+  // "How To Use" tab. Easy to grab by mistake since the names look alike.
+  if (workbook.worksheets.some((ws) => ws.name === "How To Use")) {
+    throw new ReportError(
+      "This is a cleaned copy, not the original report. Upload the file from the email (named like South_Central_Open_Job_Report_10-19-2026.xlsx).",
+    );
+  }
+
+  // Find the "Job Title" header: on any sheet, in any column, within the first
+  // 30 rows. Comparing a normalized version ignores extra/odd spaces and case.
+  const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  let sheet: ExcelJS.Worksheet | undefined;
   let headerRow = 0;
-  sheet.eachRow((row, n) => {
-    if (!headerRow && cellText(row.getCell(1).value).trim() === "Job Title") headerRow = n;
-  });
-  if (!headerRow) {
-    throw new ReportError("Couldn't find the \"Job Title\" header. Is this the South Central open job report?");
+  for (const ws of workbook.worksheets) {
+    for (let r = 1; r <= Math.min(ws.rowCount, 30) && !headerRow; r++) {
+      ws.getRow(r).eachCell((cell) => {
+        if (normalize(cellText(cell.value)) === "job title") headerRow = r;
+      });
+    }
+    if (headerRow) {
+      sheet = ws;
+      break;
+    }
+  }
+  if (!sheet || !headerRow) {
+    // Say what we DID see, so the problem is obvious
+    const first = workbook.worksheets[0];
+    // First non-empty cell of each of the first 3 rows. Array.from fills the
+    // gaps exceljs leaves for empty cells, so .find doesn't trip on them.
+    const seen = [1, 2, 3]
+      .map((r) => Array.from(first.getRow(r).values as ExcelJS.CellValue[], (v) => cellText(v).trim()))
+      .map((texts) => texts.find(Boolean))
+      .filter((t): t is string => Boolean(t))
+      .map((t) => `"${t.slice(0, 60)}"`);
+    throw new ReportError(
+      `Couldn't find the "Job Title" column. Sheets in this file: ${workbook.worksheets.map((ws) => ws.name).join(", ")}. ` +
+        `First rows say: ${seen.join(", ") || "(empty)"}.`,
+    );
   }
 
   // Map column names to column numbers, so column order doesn't matter
   const col: Record<string, number> = {};
-  sheet.getRow(headerRow).eachCell((cell, n) => (col[cellText(cell.value).trim()] = n));
+  sheet.getRow(headerRow).eachCell((cell, n) => {
+    const name = cellText(cell.value).replace(/\s+/g, " ").trim();
+    col[name] = n;
+  });
   const missing = REQUIRED_COLUMNS.filter((name) => !col[name]);
   if (missing.length) throw new ReportError(`The report is missing these columns: ${missing.join(", ")}.`);
 
