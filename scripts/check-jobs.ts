@@ -17,7 +17,7 @@ import path from "node:path";
 import type { JobReport } from "../src/lib/types";
 import {
   hostOf, linkedInGuestUrl, parseGeneric, parseJobsEq, parseLinkedIn, sourceOf,
-  type Verdict,
+  type Verdict, INDEED_MAX_AGE_DAYS_LISTED
 } from "../src/lib/verify/checks";
 import { daysBetween, toStatusJson, type JobCheck, type StatusFile } from "../src/lib/verify/status";
 
@@ -114,7 +114,11 @@ async function checkJob(job: JobReport["jobs"][number]): Promise<JobCheck> {
 
   // Step 2: the original posting
   const source = sourceOf(applyUrl);
-  if (source === "indeed") return result({ state: "unknown", reason: "indeed" }, applyUrl);
+  if (source === "indeed") {
+    // Indeed blocks automated checks, so go by age instead (see checks.ts)
+    const tooOld = job.daysOld > INDEED_MAX_AGE_DAYS_LISTED;
+    return result(tooOld ? { state: "closed", reason: "indeed-old" } : { state: "unknown", reason: "indeed" }, applyUrl);
+  }
 
   if (source === "linkedin") {
     const guest = linkedInGuestUrl(applyUrl);
@@ -154,9 +158,14 @@ async function main() {
 
   await eachLimit(jobs, 8, async (job) => {
     const before = previous.jobs[job.id];
-    // Once JobsEQ itself drops a job, it doesn't come back - no need to ask again.
-    // Everything else gets re-checked, so a wrong "closed" can correct itself.
-    if (before?.reason === "jobseq-removed" || before?.reason === "jobseq-inactive") {
+        // Some "closed" answers are final - those jobs never come back, so don't
+    // ask again: JobsEQ dropped it, or LinkedIn said it's closed/gone.
+    // Employer sites get re-checked, so a wrong "closed" can correct itself.
+    const final =
+      before?.reason === "jobseq-removed" ||
+      before?.reason === "jobseq-inactive" ||
+      (before?.state === "closed" && before.source === "linkedin.com");
+    if (final) {
       next.jobs[job.id] = before;
     } else {
       const now = await checkJob(job);

@@ -3,6 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { combine, type IndeedStatusFile, type StatusFile } from "./status";
 import {
   indeedJobKey, linkedInGuestUrl, parseGeneric, parseIndeedText, parseJobsEq, parseLinkedIn, sourceOf,
 } from "./checks";
@@ -154,4 +155,42 @@ test("sourceOf", () => {
   assert.equal(sourceOf("https://www.linkedin.com/jobs/view/1/"), "linkedin");
   assert.equal(sourceOf("https://www.indeed.com/viewjob?jk=abc"), "indeed");
   assert.equal(sourceOf("https://jobs.lever.co/x/y"), "other");
+});
+
+// ---------- How the site combines the two status files ----------
+
+const weeklyFile: StatusFile = {
+  checkedAt: "2026-11-05T08:00:00Z",
+  jobs: {
+    a: { state: "unknown", reason: "indeed", source: "indeed.com", applyUrl: "https://www.indeed.com/viewjob?jk=aaaaaaaa", checkedAt: "2026-11-05" },
+    b: { state: "unknown", reason: "indeed", source: "indeed.com", applyUrl: "https://www.indeed.com/viewjob?jk=bbbbbbbb", checkedAt: "2026-11-05" },
+  },
+};
+const indeedFile: IndeedStatusFile = {
+  checkedAt: "2026-10-29T10:00:00Z",
+  jobs: {
+    a: { state: "closed", reason: "source-closed", checkedAt: "2026-10-01" }, // closed weeks ago
+    b: { state: "open", reason: "source-open", checkedAt: "2026-10-01" }, // open weeks ago
+  },
+};
+
+test("Indeed 'closed' never expires; an old 'open' does", () => {
+  assert.equal(combine("a", weeklyFile, indeedFile, "2026-11-05").state, "closed");
+  assert.equal(combine("b", weeklyFile, indeedFile, "2026-11-05").state, "unknown");
+});
+
+test("Indeed over a month old is hidden unless you confirmed it open from your PC", () => {
+  const weekly: StatusFile = {
+    checkedAt: "2026-11-05T08:00:00Z",
+    jobs: {
+      old: { state: "closed", reason: "indeed-old", source: "indeed.com", applyUrl: "https://www.indeed.com/viewjob?jk=cccccccc", checkedAt: "2026-11-05" },
+      oldButOpen: { state: "closed", reason: "indeed-old", source: "indeed.com", applyUrl: "https://www.indeed.com/viewjob?jk=dddddddd", checkedAt: "2026-11-05" },
+    },
+  };
+  const pc: IndeedStatusFile = {
+    checkedAt: "2026-11-04T10:00:00Z",
+    jobs: { oldButOpen: { state: "open", reason: "source-open", checkedAt: "2026-11-04" } },
+  };
+  assert.equal(combine("old", weekly, pc, "2026-11-05").state, "closed");
+  assert.equal(combine("oldButOpen", weekly, pc, "2026-11-05").state, "open");
 });

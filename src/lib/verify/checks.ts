@@ -19,6 +19,7 @@ export type CheckReason =
   | "source-gone" // original posting returns 404/410
   | "source-open" // original posting is up and shows the job
   | "indeed" // Indeed blocks automated checks; checked from your PC instead
+  | "indeed-old" // Indeed posting over a month old - those have almost always expired
   | "blocked" // site refused the request (403, 429, bot check)
   | "unclear" // page loaded but didn't clearly show the job either way
   | "error"; // timeout, network error, server error
@@ -118,9 +119,13 @@ export function parseLinkedIn(status: number, html: string): Verdict {
   return { state: "unknown", reason: "unclear" };
 }
 
-// ---------------------------------------------------------------------------
-// Step 2b: Indeed (only used by the Chrome script on your PC)
-// ---------------------------------------------------------------------------
+// Step 2b: Indeed
+
+// Indeed postings usually expire about 30 days after they go up, and they
+// reach the JobsEQ report late: in the Oct 26 report every Indeed job was
+// 46-90 days old, and 17 of 20 checked by hand had expired. So Indeed jobs
+// older than this are treated as closed without visiting Indeed.
+export const INDEED_MAX_AGE_DAYS_LISTED = 30;
 
 export function indeedJobKey(applyUrl: string): string | null {
   return applyUrl.match(/[?&](?:jk|vjk)=([a-f0-9]{8,})/i)?.[1] ?? null;

@@ -48,7 +48,8 @@ export default function Home() {
               Each week, when the new report comes in, we check every job&apos;s original
               posting. The last check, on{" "}
               {formatDate(checks.checkedAt.slice(0, 10), true)}, found{" "}
-              {checks.closedCount.toLocaleString()} more that had closed, so they&apos;re hidden too.
+              {checks.closedCount.toLocaleString()} more that had closed or were Indeed postings over
+              a month old (those have almost always expired), so they&apos;re hidden too.
               Jobs marked &quot;Confirmed open&quot; were still taking applications when checked.
             </p>
           )}

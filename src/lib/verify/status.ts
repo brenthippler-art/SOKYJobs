@@ -40,8 +40,9 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 }
 
-// One final answer per job. JobsEQ's "closed" always wins; for Indeed jobs
-// the weekly check can't see, a recent PC check fills in the answer.
+// An Indeed "open" result older than this is ignored, so a job that closed
+// after your last PC check doesn't keep a stale "Confirmed open" badge.
+// (An Indeed "closed" result never expires - expired jobs don't come back.)
 export function combine(
   id: string,
   weekly: StatusFile,
@@ -50,9 +51,12 @@ export function combine(
 ): { state: CheckState; checkedAt: string | null } {
   const check = weekly.jobs[id];
   if (!check) return { state: "unknown", checkedAt: null };
-  if (check.reason === "indeed") {
+  // Indeed jobs: a check from your PC overrides the age rule, so a job you
+  // confirmed open stays listed even if it's over a month old.
+  if (check.reason === "indeed" || check.reason === "indeed-old") {
     const pc = indeed.jobs[id];
-    if (pc && pc.state !== "unknown" && daysBetween(pc.checkedAt, today) <= INDEED_MAX_AGE_DAYS) {
+    const stillFresh = pc && daysBetween(pc.checkedAt, today) <= INDEED_MAX_AGE_DAYS;
+    if (pc && (pc.state === "closed" || (pc.state === "open" && stillFresh))) {
       return { state: pc.state, checkedAt: pc.checkedAt };
     }
   }

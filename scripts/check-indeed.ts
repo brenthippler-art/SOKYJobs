@@ -41,6 +41,12 @@ const readJson = async <T>(file: string, fallback: T): Promise<T> => {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const terminal = readline.createInterface({ input: process.stdin, output: process.stdout });
 
+// Indeed sends signed-out visitors to its sign-in page: secure.indeed.com/auth...
+// (\b around "sign in" so a job title like "Sign Installer" doesn't count)
+function isSignInPage(url: string, title: string): boolean {
+  return /secure\.indeed\.com|\/auth\b|\/account\/login/i.test(url) || /\bsign in\b/i.test(title);
+}
+
 async function readVerdict(page: Page): Promise<Verdict> {
   const text = await page.locator("body").innerText({ timeout: 10_000 }).catch(() => "");
   return parseIndeedText(text, await page.title());
@@ -67,6 +73,7 @@ async function main() {
     .filter(({ check }) => check?.reason === "indeed" && check.applyUrl && indeedJobKey(check.applyUrl))
     .filter(({ job }) => {
       const prev = results.jobs[job.id];
+     if (prev?.state === "closed") return false; // expired on Indeed = gone for good, never re-check
       return !prev || prev.state === "unknown" || daysBetween(prev.checkedAt, TODAY) > SKIP_IF_CHECKED_WITHIN_DAYS;
     })
     .slice(0, limit);
@@ -109,15 +116,25 @@ async function main() {
       await sleep(1500); // let the page finish drawing
       verdict = await readVerdict(page);
 
-      if (verdict.reason === "blocked") {
+            const signIn = isSignInPage(page.url(), await page.title());
+      if (verdict.reason === "blocked" || signIn) {
+        // You do the sign-in or human check yourself in the Chrome window;
+        // the script just waits. The sign-in is saved in .indeed-profile/,
+        // so you should only need to do it on the first run.
         const answer = await terminal.question(
-          "\nIndeed wants to confirm you're human. Finish it in the Chrome window, then press Enter (or type q and Enter to stop): ",
+          signIn
+            ? "\nIndeed wants you to sign in. Sign in to your Indeed account in the Chrome window, then press Enter here (or type q and Enter to stop): "
+            : "\nIndeed wants to confirm you're human. Finish it in the Chrome window, then press Enter (or type q and Enter to stop): ",
         );
         if (answer.trim().toLowerCase() === "q") break;
-        // Load the job again now that the check is done
+        // Load the job again now that you're through
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
         await sleep(1500);
         verdict = await readVerdict(page);
+        if (isSignInPage(page.url(), await page.title())) {
+          console.log("\nIndeed is still asking to sign in, so stopping here instead of asking on every job.");
+          break;
+        }
       }
     } catch {
       // timeout or navigation error - leave as unknown
