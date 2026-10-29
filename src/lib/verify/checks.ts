@@ -37,6 +37,7 @@ export interface Verdict {
 // their JavaScript even on pages where the job is open.
 export function visibleText(html: string): string {
   return html
+    .replace(/<head[\s\S]*?<\/head>/gi, " ") // <title> and meta tags aren't on the page itself
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
@@ -186,11 +187,30 @@ export function parseGeneric(status: number, html: string, jobTitle: string): Ve
   if (BLOCKED_STATUSES.has(status)) return { state: "unknown", reason: "blocked" };
   if (status < 200 || status >= 300) return { state: "unknown", reason: "error" };
 
+    // Phenom career sites (CVS, Aerotek, O'Reilly, Humana...) put a hidden
+  // "the job you are trying to apply for has been filled" message on EVERY
+  // job page and only show it when the job is gone. So for Phenom, ignore the
+  // wording and read the job data embedded in the page instead:
+  //   open:   "jobDetail":{"status":200,"hits":1, ...the job...}
+  //   closed: "jobDetail":{"status":200,"hits":0, "data":{}}   (or a 410)
+  const phenom = html.match(/"jobDetail"\s*:\s*\{\s*"status"\s*:\s*\d+\s*,\s*"hits"\s*:\s*(\d+)/);
+  if (phenom) {
+    return Number(phenom[1]) > 0 ? { state: "open", reason: "source-open" } : { state: "closed", reason: "source-closed" };
+  }
+
   const text = visibleText(html);
-  if (CLOSED_PHRASES.some((p) => text.includes(p))) return { state: "closed", reason: "source-closed" };
+  const showsJob = mentionsTitle(text, jobTitle);
+  if (CLOSED_PHRASES.some((p) => text.includes(p))) {
+    // Safety net for other sites with hidden messages like Phenom's: if the
+    // page ALSO shows this job's title and an apply button, it's mixed
+    // signals - don't hide the job.
+    const hasApplyButton = /\bapply now\b|\bapply for this (job|position)\b/.test(text);
+    if (showsJob && hasApplyButton) return { state: "unknown", reason: "unclear" };
+    return { state: "closed", reason: "source-closed" };
+  }
   // Pages built entirely in JavaScript (Workday, many apply portals) come back
   // nearly empty. We can't tell either way, so don't guess.
   if (text.length < 400) return { state: "unknown", reason: "unclear" };
-  if (mentionsTitle(text, jobTitle)) return { state: "open", reason: "source-open" };
+  if (showsJob) return { state: "open", reason: "source-open" };
   return { state: "unknown", reason: "unclear" };
 }

@@ -154,8 +154,9 @@ async function main() {
 
   await eachLimit(jobs, 8, async (job) => {
     const before = previous.jobs[job.id];
-    // Closed stays closed - no need to ask again
-    if (before?.state === "closed") {
+    // Once JobsEQ itself drops a job, it doesn't come back - no need to ask again.
+    // Everything else gets re-checked, so a wrong "closed" can correct itself.
+    if (before?.reason === "jobseq-removed" || before?.reason === "jobseq-inactive") {
       next.jobs[job.id] = before;
     } else {
       const now = await checkJob(job);

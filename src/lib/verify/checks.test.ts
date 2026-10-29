@@ -113,6 +113,38 @@ test("Generic: JavaScript-only page (nearly empty) is unknown", () => {
   assert.equal(parseGeneric(200, `<html><body><div id="root"></div><script>${LONG}</script></body></html>`, "Teller").reason, "unclear");
 });
 
+// Trimmed from a real CVS page (Oct 29, 2026): an OPEN job whose HTML still
+// contains Phenom's hidden "has been filled" card.
+const PHENOM_OPEN = `<html><head><title>Pharmacy Technician | CVS Health</title></head><body>
+  <h2 class="phw-pb-4" data-component="card-title">We're sorry… the job you are trying to apply for has been filled.</h2>
+  <h1>Pharmacy Technician</h1><a>Apply Now</a><p>${LONG}</p>
+  <script>var phApp = {"ddo":{"jobDetail":{"status":200,"hits":1,"totalHits":1,"data":{"job":{"title":"Pharmacy Technician"}}}}}</script>
+</body></html>`;
+const PHENOM_CLOSED = `<html><body><h2>We're sorry… the job you are trying to apply for has been filled.</h2>
+  <script>var phApp = {"ddo":{"jobDetail":{"status":200,"hits":0,"totalHits":0,"data":{}}}}</script></body></html>`;
+
+test("Phenom: hidden 'filled' card on an open job is NOT closed", () => {
+  assert.deepEqual(parseGeneric(200, PHENOM_OPEN, "Pharmacy Technician"), { state: "open", reason: "source-open" });
+});
+
+test("Phenom: no job in the page data is closed", () => {
+  assert.equal(parseGeneric(200, PHENOM_CLOSED, "Pharmacy Technician").state, "closed");
+  assert.equal(parseGeneric(410, "", "Pharmacy Technician").state, "closed");
+});
+
+test("Generic: closed wording + job title + apply button = mixed signals, unknown", () => {
+  const html = `<body><h1>Machine Operator</h1><a>Apply now</a><div class="hidden">This job is no longer available</div>${LONG}</body>`;
+  assert.deepEqual(parseGeneric(200, html, "Machine Operator"), { state: "unknown", reason: "unclear" });
+});
+
+test("Generic: real closed pages still count (Luttrell, Knorr-Bremse wording)", () => {
+  const luttrell = `<body><div class="hmg-jb-alert">We're sorry, the job you are looking for is no longer available, but new jobs are added all the time.</div>
+    Other positions you may be interested in: Welder, Office Manager</body>`;
+  assert.equal(parseGeneric(200, luttrell, "Processor 4:30p-3:00a M-Thu").state, "closed");
+  const knorr = `<html><head><title>Manager, Supply Chain Excellence Job Details</title></head><body>Search by Keyword Sorry, this position has been filled.</body></html>`;
+  assert.equal(parseGeneric(200, knorr, "Manager, Supply Chain Excellence").state, "closed");
+});
+
 test("Generic: 404 closed, 403 unknown", () => {
   assert.equal(parseGeneric(404, "", "Teller").state, "closed");
   assert.equal(parseGeneric(403, "", "Teller").state, "unknown");
